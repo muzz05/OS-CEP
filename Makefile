@@ -125,6 +125,9 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 
 UPROGS=\
 	$U/_cat\
+	$U/_cpubound\
+	$U/_iobound\
+	$U/_schedulertest\
 	$U/_echo\
 	$U/_forktest\
 	$U/_grep\
