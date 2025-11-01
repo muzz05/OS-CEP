@@ -20,6 +20,8 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+extern uint ticks;
+
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
 // memory model when using p->parent.
@@ -125,6 +127,10 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  p->cpu_ticks = 0;
+  p->num_schedules = 0;
+  p->run_start_ticks = 0;
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -164,6 +170,9 @@ freeproc(struct proc *p)
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
+  p->cpu_ticks = 0;
+  p->num_schedules = 0;
+  p->run_start_ticks = 0;
   p->name[0] = 0;
   p->chan = 0;
   p->killed = 0;
@@ -426,14 +435,9 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-
+  
   c->proc = 0;
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
     intr_on();
     intr_off();
 
@@ -441,22 +445,35 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        p->num_schedules++;
+
+        // record start time in timer-tick units using the global
+        // `ticks` counter (incremented by clockintr()). This avoids
+        // conversion from r_time and yields integer tick deltas.
+        p->run_start_ticks = ticks;
+
         swtch(&c->context, &p->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
+        // On return from the process (it stopped running), account
+        // the elapsed time into cpu_ticks (in timer-tick units).
+        {
+          uint64 now = ticks;
+          uint64 delta = 0;
+          if(now > p->run_start_ticks)
+            delta = now - p->run_start_ticks;
+          p->cpu_ticks += (int)delta;
+          p->run_start_ticks = 0;
+        }
+
         c->proc = 0;
+
         found = 1;
       }
       release(&p->lock);
     }
     if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
       asm volatile("wfi");
     }
   }

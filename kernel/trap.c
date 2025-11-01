@@ -81,8 +81,12 @@ usertrap(void)
     kexit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2) {
+    // Do not increment p->cpu_ticks here; cpu accounting is now
+    // performed on schedule-out in the scheduler (schedule-time accounting).
     yield();
+  }
+
 
   prepare_return();
 
@@ -146,17 +150,21 @@ kerneltrap()
     panic("kerneltrap: interrupts enabled");
 
   if((which_dev = devintr()) == 0){
-    // interrupt or trap from an unknown source
     printf("scause=0x%lx sepc=0x%lx stval=0x%lx\n", scause, r_sepc(), r_stval());
     panic("kerneltrap");
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0)
-    yield();
-
-  // the yield() may have caused some traps to occur,
-  // so restore trap registers for use by kernelvec.S's sepc instruction.
+  if(which_dev == 2) {
+    // Only yield if there's a running process on this hart.
+    // On timer interrupts that happen when the CPU is not running
+    // a process (e.g., in the scheduler/idle), calling yield() would
+    // try to acquire a NULL `p->lock` and crash in holding().
+    struct proc *p = myproc();
+    if(p != 0 && p->state == RUNNING) {
+      yield();
+    }
+  }
   w_sepc(sepc);
   w_sstatus(sstatus);
 }
@@ -164,12 +172,13 @@ kerneltrap()
 void
 clockintr()
 {
-  if(cpuid() == 0){
-    acquire(&tickslock);
-    ticks++;
-    wakeup(&ticks);
-    release(&tickslock);
-  }
+  // Increment the global tick counter on every hart so that
+  // schedule-time accounting using `ticks` works correctly
+  // regardless of which hart a process runs on.
+  acquire(&tickslock);
+  ticks++;
+  wakeup(&ticks);
+  release(&tickslock);
 
   // ask for the next timer interrupt. this also clears
   // the interrupt request. 1000000 is about a tenth

@@ -7,6 +7,40 @@
 #include "syscall.h"
 #include "defs.h"
 
+extern struct proc proc[NPROC];
+
+uint64 sys_getprocinfo(void) {
+  int pid;
+  uint64 info_addr;
+  
+  argint(0, &pid);
+  argaddr(1, &info_addr);
+  
+  struct proc *p;
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->pid == pid) {
+      struct procinfo info;
+      info.cpu_ticks = p->cpu_ticks;
+      info.num_schedules = p->num_schedules;
+      
+      if(copyout(myproc()->pagetable, info_addr, 
+                 (char *)&info, sizeof(info)) < 0) {
+        release(&p->lock);
+        return -1;
+      }
+      release(&p->lock);
+      return p->cpu_ticks;
+    }
+    release(&p->lock);
+  }
+  
+  return -1;
+}
+
+// ... rest of the file
+
 // Fetch the uint64 at addr from the current process.
 int
 fetchaddr(uint64 addr, uint64 *ip)
@@ -105,6 +139,7 @@ extern uint64 sys_close(void);
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
 static uint64 (*syscalls[])(void) = {
+[SYS_getprocinfo] sys_getprocinfo,
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
 [SYS_wait]    sys_wait,
@@ -145,3 +180,7 @@ syscall(void)
     p->trapframe->a0 = -1;
   }
 }
+
+
+
+

@@ -18,6 +18,11 @@ struct context {
   uint64 s11;
 };
 
+struct procinfo {
+  int cpu_ticks;
+  int num_schedules;
+};
+
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
@@ -94,6 +99,10 @@ struct proc {
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
+
+  int cpu_ticks;
+  int num_schedules;
+  uint64 run_start_ticks;   // timestamp when process was scheduled running
 
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
