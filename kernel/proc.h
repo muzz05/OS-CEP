@@ -103,6 +103,10 @@ struct proc {
   int cpu_ticks;
   int num_schedules;
   uint64 run_start_ticks;   // timestamp when process was scheduled running
+  int qlev;                  // MLFQ level (0 = highest priority)
+  int qticks;                // ticks consumed at current level
+  int inqueue;               // boolean: is the proc enqueued in MLFQ
+  uint64 last_qenter_ticks;  // ticks when the proc was enqueued (for aging)
 
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
