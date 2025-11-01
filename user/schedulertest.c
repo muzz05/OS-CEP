@@ -6,7 +6,6 @@
 #define NUM_CPU_PROCS 3
 #define NUM_IO_PROCS 3
 
-// simple integer to string converter (xv6 has no sprintf)
 void itoa(int n, char *str) {
   int i = 0, j;
   char temp[10];
@@ -27,7 +26,6 @@ void itoa(int n, char *str) {
 int main(void) {
   printf("=== Scheduler Benchmark Test ===\n");
 
-  // --- Run CPU-bound processes ---
   for (int i = 0; i < NUM_CPU_PROCS; i++) {
     int pid = fork();
     if (pid == 0) {
@@ -44,8 +42,8 @@ int main(void) {
 
       int fd = open(filename, O_CREATE | O_WRONLY);
       if (fd >= 0) {
-        close(1); // close stdout
-        dup(fd);  // redirect stdout to file
+        close(1);
+        dup(fd);
         close(fd);
       }
 
@@ -55,7 +53,6 @@ int main(void) {
     }
   }
 
-  // --- Run IO-bound processes ---
   for (int i = 0; i < NUM_IO_PROCS; i++) {
     int pid = fork();
     if (pid == 0) {
@@ -83,14 +80,12 @@ int main(void) {
     }
   }
 
-  // Wait for all to complete
   for (int i = 0; i < NUM_CPU_PROCS + NUM_IO_PROCS; i++) {
     wait(0);
   }
 
   printf("All processes finished.\n");
 
-  // --- Display collected outputs ---
   char buf[512];
   for (int i = 0; i < NUM_CPU_PROCS; i++) {
     printf("\n--- CPU%d Output ---\n", i);
@@ -136,4 +131,3 @@ int main(void) {
 
   exit(0);
 }
-

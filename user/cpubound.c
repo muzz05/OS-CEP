@@ -1,4 +1,11 @@
-
+/*
+ * cpubound.c
+ * 
+ * CPU-intensive benchmark that performs heavy mathematical computations.
+ * Uses fibonacci calculations and factorial operations to maximize CPU usage
+ * without any I/O operations. Designed to test scheduler behavior with
+ * compute-heavy workloads that never voluntarily yield the processor.
+ */
 
 #include "kernel/types.h"
 #include "kernel/stat.h"
@@ -40,6 +47,9 @@ int gcd(int a, int b) {
 
 int main(int argc, char *argv[]) {
     int pid = getpid();
+    int start_time = uptime();
+    
+    printf("CPU-bound process started (PID: %d)\n", pid);
     
     int fib_sum = 0;
     int fact_sum = 0;
@@ -61,30 +71,34 @@ int main(int argc, char *argv[]) {
         }
     }
     
-
-    struct procinfo info;
-    getprocinfo(pid, &info);
+    int end_time = uptime();
+    int total_time = end_time - start_time;
     
-    if (argc > 2) {
-        int pipe_fd = 0;
-        for (int i = 0; argv[2][i] != '\0'; i++) {
-            pipe_fd = pipe_fd * 10 + (argv[2][i] - '0');
+    printf("\nCPU-bound process completed (PID: %d)\n", pid);
+    printf("Fibonacci sum: %d\n", fib_sum);
+    printf("Factorial sum: %d\n", fact_sum);
+    printf("GCD sum: %d\n", gcd_sum);
+    printf("Execution time: %d ticks\n", total_time);
+    
+    struct procinfo info;
+    int ret = getprocinfo(pid, &info);
+
+    if (ret >= 0) {
+        printf("CPU ticks used: %d\n", info.cpu_ticks);
+        printf("Times scheduled: %d\n", info.num_schedules);
+        if (info.num_schedules > 0) {
+            /* tick duration is set in kernel/trap.c via w_stimecmp(r_time() + 1000000);
+             * that interval corresponds to ~100 ms per tick in this build, so
+             * convert ticks -> ms using TICK_MS = 100.
+             */
+            const int TICK_MS = 100;
+            int avg_ms_per_sched = (info.cpu_ticks * TICK_MS) / info.num_schedules;
+            int cpu_time_ms = info.cpu_ticks * TICK_MS;
+            printf("CPU time (from cpu_ticks): %d ms\n", cpu_time_ms);
+            printf("Avg ms per schedule: %d ms\n", avg_ms_per_sched);
         }
-        
-        struct proc_stats {
-            int pid;
-            int cpu_ticks;
-            int num_schedules;
-            int is_io;
-        } stats;
-        
-        stats.pid = pid;
-        stats.cpu_ticks = info.cpu_ticks;
-        stats.num_schedules = info.num_schedules;
-        stats.is_io = 0;
-        
-        write(pipe_fd, &stats, sizeof(stats));
-        close(pipe_fd);
+    } else {
+        printf("getprocinfo failed (ret=%d)\n", ret);
     }
     
     exit(0);
