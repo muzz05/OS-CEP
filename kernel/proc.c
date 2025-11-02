@@ -34,9 +34,9 @@ static struct proc *mlfq_queues[NQL][NPROC];
 static int mlfq_head[NQL];
 static int mlfq_tail[NQL];
 static int mlfq_count[NQL];
-static const int MLFQ_QUANTUM[NQL] = {1, 2, 4, 8};
-#define AGING_INTERVAL 50
-#define AGING_THRESHOLD 100
+static const int MLFQ_QUANTUM[NQL] = {1, 4, 8, 16};
+#define AGING_INTERVAL 100
+#define AGING_THRESHOLD 50
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid

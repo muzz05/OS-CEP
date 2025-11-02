@@ -3,131 +3,81 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
 
-#define NUM_CPU_PROCS 3
-#define NUM_IO_PROCS 3
+void run(char *prog, char *outfile, int *arrival_time, int *pid_out)
+{
+  *arrival_time = uptime();
 
-void itoa(int n, char *str) {
-  int i = 0, j;
-  char temp[10];
-  if (n == 0) {
-    str[0] = '0';
-    str[1] = '\0';
-    return;
+  int pid = fork();
+  if (pid == 0)
+  {
+    int fd = open(outfile, O_WRONLY | O_CREATE | O_TRUNC);
+    if (fd < 0)
+    {
+      printf("Failed to open %s\n", outfile);
+      exit(1);
+    }
+    close(1);
+    dup(fd);
+    close(fd);
+
+    char *argv[] = {prog, 0};
+    exec(prog, argv);
+
+    printf("exec %s failed\n", prog);
+    exit(1);
   }
-  while (n > 0) {
-    temp[i++] = '0' + (n % 10);
-    n /= 10;
+  else if (pid > 0)
+  {
+    *pid_out = pid;
   }
-  for (j = 0; j < i; j++)
-    str[j] = temp[i - j - 1];
-  str[i] = '\0';
 }
 
-int main(void) {
-  printf("=== Scheduler Benchmark Test ===\n");
-
-  for (int i = 0; i < NUM_CPU_PROCS; i++) {
-    int pid = fork();
-    if (pid == 0) {
-      char filename[16] = "cpu";
-      char num[8];
-      itoa(i, num);
-      int len = strlen(filename);
-      for (int j = 0; num[j]; j++) filename[len++] = num[j];
-      filename[len++] = '.';
-      filename[len++] = 't';
-      filename[len++] = 'x';
-      filename[len++] = 't';
-      filename[len] = '\0';
-
-      int fd = open(filename, O_CREATE | O_WRONLY);
-      if (fd >= 0) {
-        close(1);
-        dup(fd);
-        close(fd);
-      }
-
-      char *args[] = {"cpubound", 0};
-      exec("cpubound", args);
-      exit(0);
-    }
+void print_file(char *filename)
+{
+  int fd = open(filename, O_RDONLY);
+  if (fd < 0)
+  {
+    printf("Could not open %s for reading\n", filename);
+    return;
   }
-
-  for (int i = 0; i < NUM_IO_PROCS; i++) {
-    int pid = fork();
-    if (pid == 0) {
-      char filename[16] = "io";
-      char num[8];
-      itoa(i, num);
-      int len = strlen(filename);
-      for (int j = 0; num[j]; j++) filename[len++] = num[j];
-      filename[len++] = '.';
-      filename[len++] = 't';
-      filename[len++] = 'x';
-      filename[len++] = 't';
-      filename[len] = '\0';
-
-      int fd = open(filename, O_CREATE | O_WRONLY);
-      if (fd >= 0) {
-        close(1);
-        dup(fd);
-        close(fd);
-      }
-
-      char *args[] = {"iobound", 0};
-      exec("iobound", args);
-      exit(0);
-    }
-  }
-
-  for (int i = 0; i < NUM_CPU_PROCS + NUM_IO_PROCS; i++) {
-    wait(0);
-  }
-
-  printf("All processes finished.\n");
 
   char buf[512];
-  for (int i = 0; i < NUM_CPU_PROCS; i++) {
-    printf("\n--- CPU%d Output ---\n", i);
+  int n;
+  printf("\n========================= Output of %s =========================\n", filename);
+  while ((n = read(fd, buf, sizeof(buf))) > 0)
+  {
+    write(1, buf, n);
+  }
+  close(fd);
+}
 
-    char filename[16] = "cpu";
-    char num[8];
-    itoa(i, num);
-    int len = strlen(filename);
-    for (int j = 0; num[j]; j++) filename[len++] = num[j];
-    filename[len++] = '.';
-    filename[len++] = 't';
-    filename[len++] = 'x';
-    filename[len++] = 't';
-    filename[len] = '\0';
+int main(void)
+{
+  printf("Launching mixed workload test...\n");
 
-    int fd = open(filename, O_RDONLY);
-    if (fd < 0) continue;
-    int n;
-    while ((n = read(fd, buf, sizeof(buf))) > 0) write(1, buf, n);
-    close(fd);
+  int arrival[4], pids[4];
+  run("cpubound", "cpu1.txt", &arrival[0], &pids[0]);
+  run("iobound", "io1.txt", &arrival[1], &pids[1]);
+  run("cpubound", "cpu2.txt", &arrival[2], &pids[2]);
+  run("iobound", "io2.txt", &arrival[3], &pids[3]);
+
+  for (int i = 0; i < 4; i++)
+    wait(0);
+
+  printf("\n--- Process Summary ---\n");
+  
+  for (int i = 0; i < 4; i++)
+  {
+    printf("PID %d | Arrival: %d ticks\n", pids[i], arrival[i]);
   }
 
-  for (int i = 0; i < NUM_IO_PROCS; i++) {
-    printf("\n--- IO%d Output ---\n", i);
+  printf("\nAll processes finished. Reading output files...\n");
 
-    char filename[16] = "io";
-    char num[8];
-    itoa(i, num);
-    int len = strlen(filename);
-    for (int j = 0; num[j]; j++) filename[len++] = num[j];
-    filename[len++] = '.';
-    filename[len++] = 't';
-    filename[len++] = 'x';
-    filename[len++] = 't';
-    filename[len] = '\0';
+  print_file("cpu1.txt");
+  print_file("io1.txt");
+  print_file("cpu2.txt");
+  print_file("io2.txt");
 
-    int fd = open(filename, O_RDONLY);
-    if (fd < 0) continue;
-    int n;
-    while ((n = read(fd, buf, sizeof(buf))) > 0) write(1, buf, n);
-    close(fd);
-  }
-
+  printf("\nAll done.\n");
   exit(0);
 }

@@ -3,12 +3,14 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
 
+extern int uptime(void);
+
 int main(int argc, char *argv[])
 {
     int pid = getpid();
     int start_time = uptime();
 
-    printf("I/O-bound process started (PID: %d)\n", pid);
+    printf("[I/O] Process started (PID: %d) at time: %d ticks\n", pid, start_time);
 
     char filename[20];
     char *prefix = "iofile_";
@@ -73,37 +75,19 @@ int main(int argc, char *argv[])
                 close(fd);
             }
         }
-
-        if (iter > 0 && iter % 50 == 0)
-        {
-            int current = uptime();
-            printf("Progress: %d operations, %d ticks elapsed\n",
-                   total_operations, current - start_time);
-        }
     }
 
-    int end_time = uptime();
-    int total_time = end_time - start_time;
-
-    printf("\nI/O-bound process completed (PID: %d)\n", pid);
-    printf("Total I/O operations: %d\n", total_operations);
-    printf("Bytes transferred: %d\n", bytes_transferred);
-    printf("Execution time: %d ticks\n", total_time);
+    int completion_time = uptime();
+    printf("[I/O] Process completed (PID: %d) at time: %d ticks\n", pid, completion_time);
 
     struct procinfo info;
     int ret = getprocinfo(pid, &info);
     if (ret >= 0)
     {
-        printf("procinfo: cpu_ticks=%d, num_schedules=%d\n",
-               info.cpu_ticks, info.num_schedules);
-        if (info.num_schedules > 0)
-        {
-            const int TICK_MS = 100;
-            int cpu_time_ms = info.cpu_ticks * TICK_MS;
-            int avg_ms = (info.cpu_ticks * TICK_MS) / info.num_schedules;
-            printf("CPU time (from cpu_ticks): %d ms\n", cpu_time_ms);
-            printf("Avg ms per schedule: %d ms\n", avg_ms);
-        }
+        printf("CPU ticks used: %d\n", info.cpu_ticks);
+        printf("Times scheduled: %d\n", info.num_schedules);
+        int turnaround_time = completion_time - start_time;
+        printf("Turnaround time: %d ticks\n", turnaround_time);
     }
     else
     {
