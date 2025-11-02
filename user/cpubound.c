@@ -1,12 +1,3 @@
-/*
- * cpubound.c
- * 
- * CPU-intensive benchmark that performs heavy mathematical computations.
- * Uses fibonacci calculations and factorial operations to maximize CPU usage
- * without any I/O operations. Designed to test scheduler behavior with
- * compute-heavy workloads that never voluntarily yield the processor.
- */
-
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
@@ -87,10 +78,6 @@ int main(int argc, char *argv[]) {
         printf("CPU ticks used: %d\n", info.cpu_ticks);
         printf("Times scheduled: %d\n", info.num_schedules);
         if (info.num_schedules > 0) {
-            /* tick duration is set in kernel/trap.c via w_stimecmp(r_time() + 1000000);
-             * that interval corresponds to ~100 ms per tick in this build, so
-             * convert ticks -> ms using TICK_MS = 100.
-             */
             const int TICK_MS = 100;
             int avg_ms_per_sched = (info.cpu_ticks * TICK_MS) / info.num_schedules;
             int cpu_time_ms = info.cpu_ticks * TICK_MS;

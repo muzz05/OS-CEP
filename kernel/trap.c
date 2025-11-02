@@ -154,12 +154,7 @@ kerneltrap()
     panic("kerneltrap");
   }
 
-  // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
-    // Only yield if there's a running process on this hart.
-    // On timer interrupts that happen when the CPU is not running
-    // a process (e.g., in the scheduler/idle), calling yield() would
-    // try to acquire a NULL `p->lock` and crash in holding().
     struct proc *p = myproc();
     if(p != 0 && p->state == RUNNING) {
       yield();
@@ -172,9 +167,6 @@ kerneltrap()
 void
 clockintr()
 {
-  // Increment the global tick counter on every hart so that
-  // schedule-time accounting using `ticks` works correctly
-  // regardless of which hart a process runs on.
   acquire(&tickslock);
   ticks++;
   wakeup(&ticks);

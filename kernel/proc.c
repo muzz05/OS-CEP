@@ -27,15 +27,14 @@ extern uint ticks;
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
-// MLFQ data structures
-#define NQL 4   // Number of queues
+
+#define NQL 4
 static struct spinlock mlfq_lock;
 static struct proc *mlfq_queues[NQL][NPROC];
 static int mlfq_head[NQL];
 static int mlfq_tail[NQL];
 static int mlfq_count[NQL];
-static const int MLFQ_QUANTUM[NQL] = {1, 2, 4, 8}; // in ticks; tune as needed
-// Aging parameters (in ticks)
+static const int MLFQ_QUANTUM[NQL] = {1, 2, 4, 8};
 #define AGING_INTERVAL 50
 #define AGING_THRESHOLD 100
 
@@ -78,20 +77,17 @@ procinit(void)
   }
 }
 
-// MLFQ helpers
 static void
 mlfq_enqueue(struct proc *p)
 {
   if(p == 0)
     return;
-  // avoid double enqueue
   acquire(&mlfq_lock);
   if(p->inqueue){
     release(&mlfq_lock);
     return;
   }
   int q = p->qlev;
-  // append to tail
   mlfq_queues[q][mlfq_tail[q]] = p;
   mlfq_tail[q] = (mlfq_tail[q] + 1) % NPROC;
   mlfq_count[q]++;
@@ -100,7 +96,6 @@ mlfq_enqueue(struct proc *p)
   release(&mlfq_lock);
 }
 
-// Dequeue from a specific level. Returns proc* or 0.
 static struct proc*
 mlfq_dequeue_level(int q)
 {
@@ -120,7 +115,6 @@ mlfq_dequeue_level(int q)
   return p;
 }
 
-// Get next runnable proc from highest non-empty queue.
 static struct proc*
 mlfq_get_next(void)
 {
@@ -513,8 +507,6 @@ kwait(uint64 addr)
 void
 scheduler(void)
 {
-  // MLFQ scheduler implementation. The previous simple round-robin
-  // scheduler is preserved in scheduler_old for reference.
   struct proc *p;
   struct cpu *c = mycpu();
 
@@ -524,14 +516,11 @@ scheduler(void)
     intr_on();
     intr_off();
 
-    // Periodic aging: promote long-waiting procs to prevent starvation.
     if(ticks - last_aging_tick >= AGING_INTERVAL){
       last_aging_tick = ticks;
-      // For each lower queue, drain and re-check each proc's age.
       for(int lvl = 1; lvl < NQL; lvl++){
         struct proc *tmp[NPROC];
         int t = 0;
-        // drain the level into tmp
         while(1){
           struct proc *pp = mlfq_dequeue_level(lvl);
           if(pp == 0) break;
@@ -539,35 +528,27 @@ scheduler(void)
         }
         for(int i = 0; i < t; i++){
           struct proc *pp = tmp[i];
-          // only consider runnable processes for promotion; others
-          // will be re-enqueued and handled when they become runnable
           if(pp->state == RUNNABLE && (ticks - pp->last_qenter_ticks) >= AGING_THRESHOLD){
             if(pp->qlev > 0) pp->qlev--;
             pp->qticks = 0;
           }
-          // re-enqueue at the (possibly promoted) level
           mlfq_enqueue(pp);
         }
       }
     }
 
-    // pick next process from MLFQ
     p = mlfq_get_next();
     if(p == 0){
-      // nothing to run
       asm volatile("wfi");
       continue;
     }
 
-    // Try to run the proc. If it's no longer RUNNABLE, skip it.
     acquire(&p->lock);
     if(p->state != RUNNABLE){
-      // skip; don't re-enqueue here (wakeup/yield will do it)
       release(&p->lock);
       continue;
     }
 
-    // dispatch
     p->state = RUNNING;
     c->proc = p;
     p->num_schedules++;
@@ -575,7 +556,6 @@ scheduler(void)
 
     swtch(&c->context, &p->context);
 
-    // On return from the process, account elapsed ticks
     {
       uint64 now = ticks;
       uint64 delta = 0;
@@ -586,9 +566,6 @@ scheduler(void)
       p->qticks += (int)delta;
     }
 
-    // If the process is still RUNNABLE, it yielded or was preempted.
-    // Demote if it exhausted its quantum for this level, otherwise
-    // re-enqueue at the same level.
     if(p->state == RUNNABLE){
       if(p->qticks >= MLFQ_QUANTUM[p->qlev]){
         if(p->qlev < NQL - 1){
