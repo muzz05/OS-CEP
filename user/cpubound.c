@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
     }
 
     int completion_time = uptime();
-    printf("[I/O] Process completed (PID: %d) at time: %d ticks\n", pid, completion_time);
+    printf("[CPU] Process completed (PID: %d) at time: %d ticks\n", pid, completion_time);
 
     struct procinfo info;
     int ret = getprocinfo(pid, &info);

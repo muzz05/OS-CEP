@@ -128,6 +128,7 @@ UPROGS=\
 	$U/_cpubound\
 	$U/_iobound\
 	$U/_schedulertest\
+	$U/_getprocinfo\
 	$U/_echo\
 	$U/_forktest\
 	$U/_grep\
